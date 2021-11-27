@@ -29,7 +29,7 @@ class Start extends Component {
           resizeMode="cover"
           style={styles.bgImage}
         >
-          <Text style={styles.h1}>CHATTY</Text>
+          <Text style={styles.h1}>chatME</Text>
           <View style={styles.box}>
             <TextInput
               style={styles.input}
