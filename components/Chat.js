@@ -1,113 +1,257 @@
 import React, { Component } from "react";
 import {
-  View,
-  Button,
   StyleSheet,
+  ImageBackground,
+  Text,
+  View,
   Platform,
   KeyboardAvoidingView,
+  LogBox,
 } from "react-native";
-import { Bubble, GiftedChat } from "react-native-gifted-chat";
+import {
+  Bubble,
+  GiftedChat,
+  SystemMessage,
+  Day,
+} from "react-native-gifted-chat";
 
-export default class Chat extends Component {
+import firebase from "firebase";
+import "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCrKORyrR2r1-OVyH5yz4P-4so68KdqrNo",
+  authDomain: "test-app-d6266.firebaseapp.com",
+  projectId: "test-app-d6266",
+  storageBucket: "test-app-d6266.appspot.com",
+  messagingSenderId: "1043724136146",
+  appId: "1:1043724136146:web:668ef14fb437e027ac070b",
+  measurementId: "G-7R7WRPYGDN"
+};
+
+/**
+ * The Chat class renders the screen where the chat happens
+ */
+class Chat extends Component {
   constructor() {
     super();
     this.state = {
       messages: [],
+      uid: 1,
+      user: {
+        _id: 1,
+        name: "",
+        avatar: "",
+      },
     };
-  }
 
+    //initializing firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    //register for updates
+    this.refMessages = firebase.firestore().collection("messages");
+    this.refMsgsUser = null;
+
+    LogBox.ignoreLogs([
+      "Setting a timer",
+      "Warning: ...",
+      "undefined",
+      "Animated.event now requires a second argument for options",
+    ]);
+  }
+  /**
+   * Lifecycle method to make sure that the component mounted
+   * before the options of the current screen are set
+   */
   componentDidMount() {
-    this.setState({
-      //mock-data
-      messages: [
-        {
-          _id: 4,
-          text: "Hello!",
-          createdAt: new Date(),
-          user: {
-            _id: 1,
-            name: this.props.route.params.name,
-          },
+    //get user name from start screen
+    const { name } = this.props.route.params;
+    //setting up the screen title
+    this.props.navigation.setOptions({ title: name ? name : "Anonymous" });
+
+    this.authUnsubscribe = firebase.auth().onAuthStateChanged((user) => {
+      if (!user) {
+        firebase.auth().signInAnonymously();
+      }
+
+      this.setState({
+        uid: user.uid,
+        messages: [],
+        user: {
+          _id: user.uid,
+          name: name,
+          avatar: "https://placeimg.com/140/140/any",
         },
-        {
-          _id: 3,
-          text: this.props.route.params.name + " has joined the chat!",
-          createdAt: new Date(),
-          system: true,
-        },
-        {
-          _id: 2,
-          text: "Hello developer",
-          createdAt: new Date(),
-          user: {
-            _id: 2,
-            name: "React Native",
-            avatar: "https://placeimg.com/140/140/any",
-          },
-        },
-        {
-          _id: 1,
-          text: "ChatBot has joined the chat!",
-          createdAt: new Date(),
-          system: true,
-        },
-      ],
+      });
+
+      //referencing messages of current user
+      this.refMsgsUser = firebase
+        .firestore()
+        .collection("messages")
+        .where("uid", "==", this.state.uid);
+
+      this.unsubscribe = this.refMessages
+        .orderBy("createdAt", "desc")
+        .onSnapshot(this.onCollectionUpdate);
     });
+
+    //setting up system message with name of the user when they join the convo
+    const systemMsg = {
+      _id: `sys-${Math.floor(Math.random() * 100000)}`,
+      text: `${name ? name : "Anonymous"} joined the conversation 👋`,
+      createdAt: new Date(),
+      system: true,
+    };
+    this.refMessages.add(systemMsg);
   }
 
-  //changing the text bubble color
+  /**
+   * Lifecycle method used to unsubsribe from updates and authentications
+   * when component unmounts
+   */
+  componentWillUnmount() {
+    this.authUnsubscribe();
+    this.unsubscribe();
+  }
+
+  /**
+   * Updates the state when a new message with the snapshot
+   * @param {*} snapshot
+   */
+  onCollectionUpdate = (snapshot) => {
+    const messages = [];
+    snapshot.forEach((doc) => {
+      let data = { ...doc.data() };
+
+      messages.push({
+        _id: data._id,
+        createdAt: data.createdAt.toDate(),
+        text: data.text || "",
+        system: data.system,
+        user: data.user,
+      });
+    });
+
+    this.setState({ messages });
+  };
+
+  /**
+   * Adds a new message to the Firebase DB
+   * @param {} msg
+   */
+  addMessage = () => {
+    const msg = this.state.messages[0];
+    this.refMessages.add({
+      uid: this.state.uid,
+      _id: msg._id,
+      text: msg.text,
+      createdAt: msg.createdAt,
+      user: this.state.user,
+    });
+  };
+
+  /**
+   * Updates the state by appending the last sent message to the rest
+   * @param {*} messages the sent message
+   */
+  onSend(messages = []) {
+    this.setState(
+      (previousState) => ({
+        messages: GiftedChat.append(previousState.messages, messages),
+        //uid: this.state.uid,
+      }),
+      () => {
+        this.addMessage();
+      }
+    );
+  }
+
+  /**
+   * Renderes a customized chat bubble
+   * @param {*} props
+   * @returns a JSX element that rapresents a text bubble with custon bg color
+   */
   renderBubble(props) {
-    let bgColor = this.props.route.params.bgColor; //choosed color in start view
     return (
       <Bubble
         {...props}
         wrapperStyle={{
-          //user's color
           right: {
-            backgroundColor: bgColor,
+            backgroundColor: "#2f2f2fb8",
           },
-          //chat partner's color
           left: {
-            backgroundColor: "#555",
+            backgroundColor: "#ffffffd9",
           },
         }}
       />
     );
   }
-
-  //add new messages to 'message' array
-  onSend(messages = []) {
-    this.setState((previousState) => ({
-      messages: GiftedChat.append(previousState.messages, messages),
-    }));
+  /**
+   * Renders a customized system message
+   * @param {*} props
+   * @returns a JSX element that represents a customized System Message
+   */
+  renderSystemMessage(props) {
+    return <SystemMessage {...props} textStyle={{ color: "#fff" }} />;
+  }
+  /**
+   * Renders a customized date
+   * @param {*} props
+   * @returns a JSX element that represents a customized date
+   */
+  renderDay(props) {
+    return <Day {...props} textStyle={{ color: "#fff" }} />;
   }
 
   render() {
-    //inputted name from Start screen
-    let name = this.props.route.params.name;
-    //display the name in header as screen title in Chat
-    this.props.navigation.setOptions({ title: name });
+    const { bgColor, bgImage } = this.props.route.params;
+
     return (
-      <View style={styles.chatContainer}>
-        <GiftedChat
-          renderBubble={this.renderBubble.bind(this)}
-          messages={this.state.messages}
-          onSend={(messages) => this.onSend(messages)}
-          user={{
-            _id: 1,
-          }}
-        />
-        {/* fix for older Android devices where the input field is hidden beneath the keyboard. */}
-        {Platform.OS === "android" ? (
-          <KeyboardAvoidingView behavior="height" />
-        ) : null}
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: bgColor ? bgColor : "#fff",
+        }}
+      >
+        <ImageBackground
+          source={bgImage}
+          resizeMode="cover"
+          style={styles.bgImage}
+        >
+          <GiftedChat
+            renderBubble={this.renderBubble.bind(this)}
+            renderSystemMessage={this.renderSystemMessage}
+            renderDay={this.renderDay}
+            messages={this.state.messages}
+            onSend={(messages) => this.onSend(messages)}
+            user={{
+              name: this.state.name,
+              _id: this.state.user._id,
+              avatar: this.state.user.avatar,
+            }}
+          />
+          {Platform.OS === "android" ? (
+            <KeyboardAvoidingView behavior="height" />
+          ) : null}
+        </ImageBackground>
       </View>
     );
   }
 }
+export default Chat;
+// Styles for Chat view
 const styles = StyleSheet.create({
-  chatContainer: {
+  bgImage: {
     flex: 1,
-    backgroundColor: "#222",
+    width: "100%",
+    flexDirection: "column",
+  },
+  loadingMsg: {
+    color: "#fff",
+    textAlign: "center",
+    margin: "auto",
+    fontSize: 12,
+    paddingVertical: 10,
   },
 });
