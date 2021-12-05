@@ -23,7 +23,8 @@
       "adaptiveIcon": {
         "foregroundImage": "",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "package": "andresphone.js"
     },
     "web": {
       "favicon": ""

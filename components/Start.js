@@ -1,6 +1,6 @@
 //AKA Screen1
 import React, { Component } from "react";
-import { ImageBackground, StyleSheet, Text, View, Button } from "react-native";
+import { ImageBackground, StyleSheet, Text, View, Button, LogBox } from "react-native";
 import { TextInput, TouchableOpacity } from "react-native-gesture-handler";
 import bgImage from "../assets/images/bkg-img.png";
 
@@ -20,7 +20,9 @@ class Start extends Component {
     lightBlue: "#8A95A5",
     lightGreen: "#B9C6AE",
   };
-
+  componentDidMount() {
+    LogBox.ignoreAllLogs();
+  }
   render() {
     return (
       <View style={styles.container}>
